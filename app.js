@@ -18,6 +18,7 @@ connection.connect(function(err) {
 
 // Main Prompts
 function runPrompts() {
+    console.log("-----------------------");
     console.log("New Request Initialized");
     console.log("-----------------------");
     inquirer
@@ -79,20 +80,32 @@ INNER JOIN role ON employee.role_id = role.id
 INNER JOIN department ON department.id = role.department_id
 `;
 
+// Display joined tables, add query filter if querying by department or by manager
 function viewAllEmployees(data) {
     let query = innerJoinAllEmployees;
     if (data.dept) {
         query = query + `WHERE department.name = "${data.dept}"`
-    } else if (data.manager) {
-        query = query + `WHERE employee.manager_id = "${data.manager}"`
+    } else if (typeof data === "number") {
+        query = query + `WHERE employee.manager_id = "${data}"`
     }
     connection.query(query, function(err, res) {
         if (err) throw err;
         console.table(res);
+
+        // If viewing by department, view the total utilized budget of the department (i.e. combined salaries)
+        if (data.dept) {
+            let salaryTotal = 0;
+            for (var i = 0; i < res.length; i++) {
+                salaryTotal += res[i].Salary;
+            }
+            console.log(`Total Salary in ${data.dept}: ${salaryTotal}`)
+        }
+
         runPrompts();
     });
 }
 
+// Prompt department options
 function viewEmployeesByDept() {
     connection.query("SELECT * FROM department", function(err, res) {
         if (err) throw err;
@@ -113,7 +126,7 @@ function viewEmployeesByDept() {
     });
 }
 
-// Need to fix
+// Prompt manager options, only prompts employees where manager id = null 
 function viewEmployeesByManager() {
     connection.query("SELECT * FROM employee WHERE manager_id IS NULL", function(err, res) {
         if (err) throw err;
@@ -129,9 +142,22 @@ function viewEmployeesByManager() {
             }
         ])
         .then(function (data) {
-            viewAllEmployees(data);
+            getManagerID(res, data.manager)
         });
     });
+}
+
+// Loop through the database response to find the manager ID with matching first name of inquirer response
+function getManagerID(obj, str) {
+    let managerName = str.split(" ");
+    let managerID = 0;
+    for (var i = 0; i < obj.length; i++) {
+        if (obj[i].first_name === managerName[0]) {
+            managerID = obj[i].id;
+        }
+    }
+
+    viewAllEmployees(managerID);
 }
 
 // Prompt which database table to add to 
