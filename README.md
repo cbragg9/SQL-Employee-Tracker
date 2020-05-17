@@ -3,10 +3,11 @@ A CLI employee management system using Node.js, Inquirer, and MySQL.
 
 
 ## Latest Commit  
--Calculated total salary when viewing by department  
--Fixed view by manager  
+-Added update employee roles  
 
 ## Previous Commits  
+-Calculated total salary when viewing by department  
+-Fixed view by manager  
 -Added view all departments and roles  
 -Modified query for DRY  
 -Added insert into departments, roles, employees tables  

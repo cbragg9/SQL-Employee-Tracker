@@ -32,6 +32,7 @@ function runPrompts() {
                 "View All Employees By Department", 
                 "View All Employees By Manager",
                 "Add Employee, Department, or Role",
+                "Update Employee Role",
                 "View All Departments",
                 "View All Roles",
                 "Exit"]
@@ -57,6 +58,9 @@ function runPrompts() {
             break;
             case "View All Roles":
                 queryRole("Query Only");
+            break;
+            case "Update Employee Role":
+                queryRole("Update");
             break;
             case "Exit":
                 connection.end();
@@ -142,22 +146,26 @@ function viewEmployeesByManager() {
             }
         ])
         .then(function (data) {
-            getManagerID(res, data.manager)
+            getEmployeeID(data.manager, "View", res);
         });
     });
 }
 
 // Loop through the database response to find the manager ID with matching first name of inquirer response
-function getManagerID(obj, str) {
-    let managerName = str.split(" ");
-    let managerID = 0;
+function getEmployeeID(employeeName, use, obj) {
+    let employeeFirstAndLast = employeeName.split(" ");
+    let employeeID = 0;
     for (var i = 0; i < obj.length; i++) {
-        if (obj[i].first_name === managerName[0]) {
-            managerID = obj[i].id;
+        if (obj[i].first_name === employeeFirstAndLast[0]) {
+            employeeID = obj[i].id;
         }
     }
 
-    viewAllEmployees(managerID);
+    if (use === "View") {
+        viewAllEmployees(employeeID);
+    } else if (use === "Update") {
+        return employeeID;
+    }
 }
 
 // Prompt which database table to add to 
@@ -194,24 +202,27 @@ function addToDatabaseInquirer() {
 function queryEmployee() {
     connection.query(`SELECT * FROM employee_tracker.employee`, function(err, res) {
         if (err) throw err;
-        let managerChoices = [];
-        res.forEach(employee => managerChoices.push(employee.first_name + " " + employee.last_name));
-        queryRole(managerChoices);
+        let employeeList = [];
+        res.forEach(employee => employeeList.push(employee.first_name + " " + employee.last_name));
+        queryRole(employeeList);
+
     });
 }
 
 // Query ROLE table to get the potential role choices in an array, pass array forward
-function queryRole(managerChoices) {
+function queryRole(employeeList) {
     connection.query(`SELECT * FROM employee_tracker.role`, function(err, res) {
         if (err) throw err;
-        
-        if (managerChoices === "Query Only") {
+        let roleChoices = [];
+        res.forEach(role => roleChoices.push(role.title));
+
+        if (employeeList === "Query Only") {
             console.table(res);
             runPrompts();
+        } else if (employeeList === "Update") {
+            updateRoleInquirer(roleChoices);
         } else {
-            let roleChoices = [];
-            res.forEach(role => roleChoices.push(role.title));
-            insertIntoEmployee(managerChoices, roleChoices);
+            insertIntoEmployee(employeeList, roleChoices);
         }
     });
 }
@@ -320,5 +331,61 @@ function insertIntoRole(departments) {
             console.log(`Added ${data.roleTitle} to role list.`);
         });
         queryRole("Query Only");
+    });
+}
+
+// UPDATE ROLE : Prompt user for the employee to update and their new role
+function updateRoleInquirer(rolesArray) {
+    connection.query(`SELECT * FROM employee_tracker.employee`, function(err, res) {
+        if (err) throw err;
+
+        let employeeArray = res.map(employee => employee.first_name + " " + employee.last_name);
+        inquirer
+        .prompt([
+            {
+                type: "list",
+                message: "Whose role do you want to update?",
+                name: "employeeChoice",
+                choices: employeeArray
+            },
+            {
+                type: "list",
+                message: "What is the employee's new role?",
+                name: "roleChoice",
+                choices: rolesArray
+            },
+        ])
+        .then(function (data) {
+            let employeeID = getEmployeeID(data.employeeChoice, "Update", res);
+            getRoleID(data.roleChoice, employeeID);
+        });
+    });
+}
+
+// UPDATE ROLE : Find the role ID that will be used in the SQL query
+function getRoleID(roleName, employeeID) {
+    connection.query(`SELECT * FROM employee_tracker.role`, function(err, res) {
+        let roleID = 0;
+        for (var i = 0; i < res.length; i++) {
+            if (res[i].title === roleName) {
+                roleID = res[i].id;
+            }
+        }
+
+        updateEmployeeSQL(roleID, employeeID)
+    });
+}
+
+// UPDATE ROLE : Make the SQL Query to update an employee's role
+function updateEmployeeSQL(roleID, employeeID) {
+    let query = `
+    UPDATE employee_tracker.employee
+    SET role_id = ${roleID}
+    WHERE id = ${employeeID}`
+
+    connection.query(query, function(err, res) {
+        if (err) throw err;
+        console.log(`Updated Employee Role.`);
+        runPrompts();
     });
 }
