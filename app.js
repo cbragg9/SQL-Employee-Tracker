@@ -354,16 +354,23 @@ function updateRoleInquirer(rolesArray) {
                 name: "roleChoice",
                 choices: rolesArray
             },
+            {
+                type: "list",
+                message: "Who is their new manager?",
+                name: "newManagerChoice",
+                choices: employeeArray
+            }
         ])
         .then(function (data) {
             let employeeID = getEmployeeID(data.employeeChoice, "Update", res);
-            getRoleID(data.roleChoice, employeeID);
+            let managerID = getEmployeeID(data.newManagerChoice, "Update", res);
+            getRoleID(data.roleChoice, employeeID, managerID);
         });
     });
 }
 
 // UPDATE ROLE : Find the role ID that will be used in the SQL query
-function getRoleID(roleName, employeeID) {
+function getRoleID(roleName, employeeID, managerID) {
     connection.query(`SELECT * FROM employee_tracker.role`, function(err, res) {
         let roleID = 0;
         for (var i = 0; i < res.length; i++) {
@@ -372,15 +379,15 @@ function getRoleID(roleName, employeeID) {
             }
         }
 
-        updateEmployeeSQL(roleID, employeeID)
+        updateEmployeeSQL(roleID, employeeID, managerID)
     });
 }
 
 // UPDATE ROLE : Make the SQL Query to update an employee's role
-function updateEmployeeSQL(roleID, employeeID) {
+function updateEmployeeSQL(roleID, employeeID, managerID) {
     let query = `
     UPDATE employee_tracker.employee
-    SET role_id = ${roleID}
+    SET role_id = ${roleID}, manager_id = ${managerID}
     WHERE id = ${employeeID}`
 
     connection.query(query, function(err, res) {
