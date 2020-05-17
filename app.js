@@ -51,6 +51,12 @@ function runPrompts() {
             case "Add Employee, Department, or Role":
                 addToDatabaseInquirer();
             break;
+            case "View All Departments":
+                queryDepartment("Query Only");
+            break;
+            case "View All Roles":
+                queryRole("Query Only");
+            break;
             case "Exit":
                 connection.end();
             break;
@@ -172,19 +178,31 @@ function queryEmployee() {
 function queryRole(managerChoices) {
     connection.query(`SELECT * FROM employee_tracker.role`, function(err, res) {
         if (err) throw err;
-        let roleChoices = [];
-        res.forEach(role => roleChoices.push(role.title));
-        insertIntoEmployee(managerChoices, roleChoices);
+        
+        if (managerChoices === "Query Only") {
+            console.table(res);
+            runPrompts();
+        } else {
+            let roleChoices = [];
+            res.forEach(role => roleChoices.push(role.title));
+            insertIntoEmployee(managerChoices, roleChoices);
+        }
     });
 }
 
 // Query DEPARTMENT table to get the potential department names in an array, pass array forward
-function queryDepartment() {
+function queryDepartment(input) {
     connection.query(`SELECT * FROM employee_tracker.department`, function(err, res) {
         if (err) throw err;
-        let departmentChoices = [];
-        res.forEach(department => departmentChoices.push(department.name));
-        insertIntoRole(departmentChoices);
+
+        if (input === "Query Only") {
+            console.table(res);
+            runPrompts();
+        } else {
+            let departmentChoices = [];
+            res.forEach(department => departmentChoices.push(department.name));
+            insertIntoRole(departmentChoices);
+        }
     });
 }
 
@@ -241,11 +259,7 @@ function insertIntoDepartment(data) {
         if (err) throw err;
         console.log(`Added ${data.deptName} to departments list.`);
     });
-    connection.query("SELECT * FROM employee_tracker.department", function(err, res) {
-        if (err) throw err;
-        console.table(res);
-        runPrompts();
-    });
+    queryDepartment("Query Only");
 }
 
 // ADD NEW ROLE: Use the department names in Inquirer, then insert into employee table with responses
@@ -279,10 +293,6 @@ function insertIntoRole(departments) {
             if (err) throw err;
             console.log(`Added ${data.roleTitle} to role list.`);
         });
-        connection.query("SELECT * FROM employee_tracker.role", function(err, res) {
-            if (err) throw err;
-            console.table(res);
-            runPrompts();
-        });
+        queryRole("Query Only");
     });
 }
