@@ -78,14 +78,14 @@ const innerJoinAllEmployees =
     role.title as Title, 
     department.name as Dept,
     role.salary as Salary,
-    employee.manager_id as "Manager ID"
+    employee.manager_id as "Manager"
 FROM employee
 INNER JOIN role ON employee.role_id = role.id
 INNER JOIN department ON department.id = role.department_id
 `;
 
 // Display joined tables, add query filter if querying by department or by manager
-function viewAllEmployees(data) {
+function viewAllEmployees(data, employeeName) {
     let query = innerJoinAllEmployees;
     if (data.dept) {
         query = query + `WHERE department.name = "${data.dept}"`
@@ -94,19 +94,54 @@ function viewAllEmployees(data) {
     }
     connection.query(query, function(err, res) {
         if (err) throw err;
-        console.table(res);
 
-        // If viewing by department, view the total utilized budget of the department (i.e. combined salaries)
-        if (data.dept) {
-            let salaryTotal = 0;
+        // If searching by manager ID, set Manager field to the passed in employee name, else get manager names
+        if (typeof data === "number") {
             for (var i = 0; i < res.length; i++) {
-                salaryTotal += res[i].Salary;
+                res[i].Manager = employeeName;
             }
-            console.log(`Total Salary in ${data.dept}: ${salaryTotal}`)
+            console.table(res);
+        } else {
+            let modifiedNames = getManagerNames(res);
+            console.table(modifiedNames);
+        }
+
+        // If viewing by department
+        if (data.dept) {
+            getSalary(data.dept, res);
         }
 
         runPrompts();
     });
+}
+
+// Calculates the total utilized budget of the department if viewing by department
+function getSalary(departmentName, res) {
+    let salaryTotal = 0;
+    for (var i = 0; i < res.length; i++) {
+        salaryTotal += res[i].Salary;
+    }
+    console.log(`Total Salary in ${departmentName}: ${salaryTotal}`)
+}
+
+// Take SQL response and modify Manager IDs with Manager Names 
+function getManagerNames(sqlResponse) {
+    let updatedSQL = sqlResponse;
+    let counter = {};
+
+    for (var i = 0; i < updatedSQL.length; i++) {
+        let employeeID = updatedSQL[i].ID;
+        let employeeName = updatedSQL[i].First + " " + updatedSQL[i].Last;
+        counter[employeeID] = employeeName;
+    }
+
+    for (var i = 0; i < updatedSQL.length; i++) {
+        if (updatedSQL[i].Manager) {
+            updatedSQL[i].Manager = counter[updatedSQL[i].Manager];
+        }
+    }
+
+    return updatedSQL;
 }
 
 // Prompt department options
@@ -114,6 +149,7 @@ function viewEmployeesByDept() {
     connection.query("SELECT * FROM department", function(err, res) {
         if (err) throw err;
         let deptOptions = res.map(element => element.name);
+        deptOptions.push("Return to Main");
         
         inquirer
         .prompt([
@@ -125,7 +161,11 @@ function viewEmployeesByDept() {
             }
         ])
         .then(function (data) {
-            viewAllEmployees(data);
+            if (data.dept === "Return to Main") {
+                runPrompts();
+            } else {
+                viewAllEmployees(data);
+            }
         });
     });
 }
@@ -135,7 +175,8 @@ function viewEmployeesByManager() {
     connection.query("SELECT * FROM employee WHERE manager_id IS NULL", function(err, res) {
         if (err) throw err;
         let managerOptions = res.map(element => element.first_name + " " +  element.last_name);
-        
+        managerOptions.push("Return to Main");
+
         inquirer
         .prompt([
             {
@@ -146,7 +187,11 @@ function viewEmployeesByManager() {
             }
         ])
         .then(function (data) {
-            getEmployeeID(data.manager, "View", res);
+            if (data.manager === "Return to Main") {
+                runPrompts();
+            } else {
+                getEmployeeID(data.manager, "View", res);
+            }
         });
     });
 }
@@ -162,8 +207,11 @@ function getEmployeeID(employeeName, use, obj) {
     }
 
     if (use === "View") {
-        viewAllEmployees(employeeID);
+        viewAllEmployees(employeeID, employeeName);
     } else if (use === "Update") {
+        if (employeeID === 0) {
+            employeeID = null;
+        }
         return employeeID;
     }
 }
@@ -176,7 +224,7 @@ function addToDatabaseInquirer() {
             type: "list",
             message: "What would you like to add?",
             name: "addSelection",
-            choices: ["Employee", "Department", "Role"]
+            choices: ["Employee", "Department", "Role", "Return to Main"]
         },
         {
             type: "input",
@@ -193,6 +241,8 @@ function addToDatabaseInquirer() {
             insertIntoDepartment(data);
         } else if (data.addSelection === "Role") {
             queryDepartment();
+        } else if (data.addSelection === "Return to Main") {
+            runPrompts();
         }
 
     });
@@ -245,6 +295,7 @@ function queryDepartment(input) {
 
 // ADD NEW EMPLOYEE: Use the manager and role names in Inquirer, then insert into employee table with responses
 function insertIntoEmployee(managers, roles) {
+    managers.push("null");
     inquirer
     .prompt([        
     {
@@ -272,8 +323,11 @@ function insertIntoEmployee(managers, roles) {
     ])
     .then(function (data) {
 
+        let managerID = null;
+        if (data.managerChoice != "null") {
+            managerID = managers.indexOf(data.managerChoice) + 1;
+        }
         let roleID = roles.indexOf(data.roleChoice) + 1;
-        let managerID = managers.indexOf(data.managerChoice) + 1;
         let query = 
         `INSERT INTO employee_tracker.employee (first_name, last_name, role_id, manager_id) 
         VALUES ("${data.firstName}", "${data.lastName}", ${roleID}, ${managerID})`
@@ -281,11 +335,7 @@ function insertIntoEmployee(managers, roles) {
         connection.query(query, function(err, res) {
             if (err) throw err;
             console.log(`Added ${data.firstName} ${data.lastName} to employees list.`);
-        });
-        connection.query("SELECT * FROM employee_tracker.employee", function(err, res) {
-            if (err) throw err;
-            console.table(res);
-            runPrompts();
+            viewAllEmployees(data);
         });
     });
 }
@@ -340,6 +390,8 @@ function updateRoleInquirer(rolesArray) {
         if (err) throw err;
 
         let employeeArray = res.map(employee => employee.first_name + " " + employee.last_name);
+        employeeArray.push("null");
+
         inquirer
         .prompt([
             {
