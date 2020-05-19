@@ -32,7 +32,7 @@ function runPrompts() {
                 "View All Employees By Department", 
                 "View All Employees By Manager",
                 "Add Employee, Department, or Role",
-                "Update Employee Role",
+                "Update Employee Role and/or Manager",
                 "View All Departments",
                 "View All Roles",
                 "Exit"]
@@ -59,7 +59,7 @@ function runPrompts() {
             case "View All Roles":
                 queryRole("Query Only");
             break;
-            case "Update Employee Role":
+            case "Update Employee Role and/or Manager":
                 queryRole("Update");
             break;
             case "Exit":
@@ -70,41 +70,32 @@ function runPrompts() {
 }
 
 // SQL Join for employee query
-const innerJoinAllEmployees = 
-`SELECT 
-    employee.id as ID, 
-    employee.first_name as First, 
-    employee.last_name as Last, 
-    role.title as Title, 
-    department.name as Dept,
-    role.salary as Salary,
-    employee.manager_id as "Manager"
-FROM employee
-INNER JOIN role ON employee.role_id = role.id
-INNER JOIN department ON department.id = role.department_id
-`;
+const joinAllEmployees = 
+    `SELECT 
+        e.id as ID, 
+        e.first_name as First, 
+        e.last_name as Last, 
+        r.title as Title, 
+        d.name as Dept,
+        r.salary as Salary,
+        CONCAT(m.first_name," ",m.last_name) as "Manager"
+    FROM employee e
+    JOIN role r ON e.role_id = r.id
+    JOIN department d ON d.id = r.department_id
+    LEFT JOIN employee m ON e.manager_id = m.id
+    `;
 
-// Display joined tables, add query filter if querying by department or by manager
-function viewAllEmployees(data, employeeName) {
-    let query = innerJoinAllEmployees;
+// Display joined tables, add query filter if querying by department or by manager id (number)
+function viewAllEmployees(data) {
+    let query = joinAllEmployees;
     if (data.dept) {
-        query = query + `WHERE department.name = "${data.dept}"`
+        query = query + `WHERE d.name = "${data.dept}"`
     } else if (typeof data === "number") {
-        query = query + `WHERE employee.manager_id = "${data}"`
+        query = query + `WHERE e.manager_id = "${data}"`
     }
     connection.query(query, function(err, res) {
         if (err) throw err;
-
-        // If searching by manager ID, set Manager field to the passed in employee name, else get manager names
-        if (typeof data === "number") {
-            for (var i = 0; i < res.length; i++) {
-                res[i].Manager = employeeName;
-            }
-            console.table(res);
-        } else {
-            let modifiedNames = getManagerNames(res);
-            console.table(modifiedNames);
-        }
+        console.table(res);
 
         // If viewing by department
         if (data.dept) {
@@ -124,25 +115,6 @@ function getSalary(departmentName, res) {
     console.log(`Total Salary in ${departmentName}: ${salaryTotal}`)
 }
 
-// Take SQL response and modify Manager IDs with Manager Names 
-function getManagerNames(sqlResponse) {
-    let updatedSQL = sqlResponse;
-    let counter = {};
-
-    for (var i = 0; i < updatedSQL.length; i++) {
-        let employeeID = updatedSQL[i].ID;
-        let employeeName = updatedSQL[i].First + " " + updatedSQL[i].Last;
-        counter[employeeID] = employeeName;
-    }
-
-    for (var i = 0; i < updatedSQL.length; i++) {
-        if (updatedSQL[i].Manager) {
-            updatedSQL[i].Manager = counter[updatedSQL[i].Manager];
-        }
-    }
-
-    return updatedSQL;
-}
 
 // Prompt department options
 function viewEmployeesByDept() {
@@ -435,7 +407,7 @@ function getRoleID(roleName, employeeID, managerID) {
     });
 }
 
-// UPDATE ROLE : Make the SQL Query to update an employee's role
+// UPDATE ROLE : Make the SQL Query to update an employee's role and/or manager
 function updateEmployeeSQL(roleID, employeeID, managerID) {
     let query = `
     UPDATE employee_tracker.employee
