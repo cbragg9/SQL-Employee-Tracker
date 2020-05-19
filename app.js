@@ -142,11 +142,20 @@ function viewEmployeesByDept() {
     });
 }
 
-// Prompt manager options, only prompts employees where manager id = null 
+// Prompt manager options, only prompts employees once (distinct) where manager id != null 
 function viewEmployeesByManager() {
-    connection.query("SELECT * FROM employee WHERE manager_id IS NULL", function(err, res) {
+
+    let query = 
+    `SELECT DISTINCT
+        e.manager_id,
+        CONCAT(m.first_name," ",m.last_name) as "Manager"
+    FROM employee e
+    LEFT JOIN employee m ON e.manager_id = m.id
+    WHERE e.manager_ID IS NOT NULL`;
+
+    connection.query(query, function(err, res) {
         if (err) throw err;
-        let managerOptions = res.map(element => element.first_name + " " +  element.last_name);
+        let managerOptions = res.map(element => element.Manager);
         managerOptions.push("Return to Main");
 
         inquirer
@@ -162,14 +171,18 @@ function viewEmployeesByManager() {
             if (data.manager === "Return to Main") {
                 runPrompts();
             } else {
-                getEmployeeID(data.manager, "View", res);
+                for (var i = 0; i < res.length; i++) {
+                    if (data.manager === res[i].Manager) {
+                        viewAllEmployees(res[i].manager_id);
+                    }
+                }
             }
         });
     });
 }
 
 // Loop through the database response to find the manager ID with matching first name of inquirer response
-function getEmployeeID(employeeName, use, obj) {
+function getEmployeeID(employeeName, obj) {
     let employeeFirstAndLast = employeeName.split(" ");
     let employeeID = 0;
     for (var i = 0; i < obj.length; i++) {
@@ -178,14 +191,11 @@ function getEmployeeID(employeeName, use, obj) {
         }
     }
 
-    if (use === "View") {
-        viewAllEmployees(employeeID, employeeName);
-    } else if (use === "Update") {
-        if (employeeID === 0) {
-            employeeID = null;
-        }
-        return employeeID;
+    if (employeeID === 0) {
+        employeeID = null;
     }
+
+    return employeeID;
 }
 
 // Prompt which database table to add to 
@@ -233,10 +243,20 @@ function queryEmployee() {
 
 // Query ROLE table to get the potential role choices in an array, pass array forward
 function queryRole(employeeList) {
-    connection.query(`SELECT * FROM employee_tracker.role`, function(err, res) {
+
+    let query = 
+    `SELECT
+        r.id,
+        r.title as Title,
+        r.salary as Salary,
+        d.name as Department
+    FROM role r
+    JOIN department d ON r.department_id = d.id`;
+
+    connection.query(query, function(err, res) {
         if (err) throw err;
         let roleChoices = [];
-        res.forEach(role => roleChoices.push(role.title));
+        res.forEach(role => roleChoices.push(role.Title));
 
         if (employeeList === "Query Only") {
             console.table(res);
@@ -386,8 +406,8 @@ function updateRoleInquirer(rolesArray) {
             }
         ])
         .then(function (data) {
-            let employeeID = getEmployeeID(data.employeeChoice, "Update", res);
-            let managerID = getEmployeeID(data.newManagerChoice, "Update", res);
+            let employeeID = getEmployeeID(data.employeeChoice, res);
+            let managerID = getEmployeeID(data.newManagerChoice, res);
             getRoleID(data.roleChoice, employeeID, managerID);
         });
     });

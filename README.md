@@ -3,10 +3,12 @@ A CLI employee management system using Node.js, Inquirer, and MySQL.
 
 
 ## Latest Commit  
--Abbreviated SQL query  
--Manager name provided by Left Join instead of JS function  
+-Department name shows up in instead of department id when viewing all roles  
+-Managers listed by distinct manager_id instead of not null  
 
 ## Previous Commits  
+-Abbreviated SQL query  
+-Manager name provided by Left Join instead of JS function  
 -Added more options to return to main prompt  
 -Adding or updating employees can now have null managers    
 -Created functions to replace Manager ID with Manager names   
