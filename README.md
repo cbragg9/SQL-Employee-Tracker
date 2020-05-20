@@ -3,7 +3,7 @@
 
 ## Watch the full DEMO: https://youtu.be/YPeN6KEYjOI
 
-![CLI Example](./screenshot.jpg)  
+![CLI Screenshot](/Screenshot.JPG)  
 
 ## Script Features  
 -SQL Schema and Seeds initialized database with 3 tables (employees, roles, departments)  
