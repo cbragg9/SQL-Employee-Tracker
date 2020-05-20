@@ -33,6 +33,7 @@ function runPrompts() {
                 "View All Employees By Manager",
                 "Add Employee, Department, or Role",
                 "Update Employee Role and/or Manager",
+                "Remove Employee",
                 "View All Departments",
                 "View All Roles",
                 "Exit"]
@@ -61,6 +62,9 @@ function runPrompts() {
             break;
             case "Update Employee Role and/or Manager":
                 queryRole("Update");
+            break;
+            case "Remove Employee":
+                queryEmployee();
             break;
             case "Exit":
                 connection.end();
@@ -151,7 +155,7 @@ function viewEmployeesByManager() {
         CONCAT(m.first_name," ",m.last_name) as "Manager"
     FROM employee e
     LEFT JOIN employee m ON e.manager_id = m.id
-    WHERE e.manager_ID IS NOT NULL`;
+    WHERE m.first_name IS NOT NULL`;
 
     connection.query(query, function(err, res) {
         if (err) throw err;
@@ -218,7 +222,7 @@ function addToDatabaseInquirer() {
     .then(function (data) {
 
         if (data.addSelection === "Employee") {
-            queryEmployee();
+            queryEmployee("Add");
         } else if (data.addSelection === "Department") {
             insertIntoDepartment(data);
         } else if (data.addSelection === "Role") {
@@ -231,18 +235,18 @@ function addToDatabaseInquirer() {
 };
 
 // Query EMPLOYEE table to get the potential manager names in an array, pass array forward
-function queryEmployee() {
+function queryEmployee(use) {
     connection.query(`SELECT * FROM employee_tracker.employee`, function(err, res) {
         if (err) throw err;
         let employeeList = [];
         res.forEach(employee => employeeList.push(employee.first_name + " " + employee.last_name));
-        queryRole(employeeList);
+        use === "Add" ? queryRole(employeeList, res) : removeEmployee(employeeList, res);
 
     });
 }
 
 // Query ROLE table to get the potential role choices in an array, pass array forward
-function queryRole(employeeList) {
+function queryRole(employeeList, fullTable) {
 
     let query = 
     `SELECT
@@ -264,7 +268,7 @@ function queryRole(employeeList) {
         } else if (employeeList === "Update") {
             updateRoleInquirer(roleChoices);
         } else {
-            insertIntoEmployee(employeeList, roleChoices);
+            insertIntoEmployee(employeeList, roleChoices, fullTable);
         }
     });
 }
@@ -286,7 +290,7 @@ function queryDepartment(input) {
 }
 
 // ADD NEW EMPLOYEE: Use the manager and role names in Inquirer, then insert into employee table with responses
-function insertIntoEmployee(managers, roles) {
+function insertIntoEmployee(managers, roles, fullTable) {
     managers.push("null");
     inquirer
     .prompt([        
@@ -314,10 +318,12 @@ function insertIntoEmployee(managers, roles) {
     },
     ])
     .then(function (data) {
+        console.log(roles);
+        console.log(managers);
 
         let managerID = null;
         if (data.managerChoice != "null") {
-            managerID = managers.indexOf(data.managerChoice) + 1;
+            managerID = getEmployeeID(data.managerChoice, fullTable);
         }
         let roleID = roles.indexOf(data.roleChoice) + 1;
         let query = 
@@ -438,5 +444,37 @@ function updateEmployeeSQL(roleID, employeeID, managerID) {
         if (err) throw err;
         console.log(`Updated Employee Role.`);
         runPrompts();
+    });
+}
+
+// REMOVE EMPLOYEE: Use the manager and role names in Inquirer, then insert into employee table with responses
+function removeEmployee(employeeList, fullTable) {
+    employeeList.push("Return to Main");
+    inquirer
+    .prompt([        
+    {
+        type: "list",
+        message: "What employee do you want to remove?",
+        name: "removeEmployee",
+        choices: employeeList
+    },
+    ])
+    .then(function (data) {
+
+        if (data.removeEmployee === "Return to Main") {
+            runPrompts();
+        } else {
+            let employeeID = getEmployeeID(data.removeEmployee, fullTable);
+
+            let query = 
+            `DELETE FROM employee WHERE id = ${employeeID}`;
+
+            connection.query(query, function(err, res) {
+                if (err) throw err;
+                console.log(`Removed ${data.removeEmployee} from the list.`);
+                viewAllEmployees(fullTable);
+            });
+        }
+
     });
 }
